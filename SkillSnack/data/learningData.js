@@ -5,10 +5,14 @@ export const learningData = {
       stock_market: {
         title: "Stock Market",
         lessons: [
-          { id: 'f1', title: "What is a Stock?" },           // 5 min
-          { id: 'f2', title: "How Exchanges Work" },         // 10 min
-          { id: 'f3', title: "Market vs Limit Orders" },     // 15 min
-          { id: 'f4', title: "Candlestick Basics" }          // Extra
+          { id: 'f1', title: "What is a Stock?", duration: "5" },
+          { id: 'f2', title: "How Exchanges Work", duration: "10" },
+          { 
+            id: 'f3', 
+            title: "Market Orders vs Limit Orders", 
+            duration: "15" // 40 XP
+          },
+          
         ]
       }
     }

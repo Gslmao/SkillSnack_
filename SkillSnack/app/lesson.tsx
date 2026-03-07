@@ -1,66 +1,90 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { FlatList, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { learningData } from '../data/learningData';
 
 export default function LessonScreen() {
+  const router = useRouter();
   const { categoryKey, topicKey, timeLimit } = useLocalSearchParams<{ 
     categoryKey: string; 
     topicKey: string; 
     timeLimit: string 
   }>();
 
-  // 1. Safe Category Access
+  // 1. Data Retrieval
   const category = learningData[categoryKey as keyof typeof learningData];
-
-  // 2. The Final Fix for the 'never' error:
-  // We explicitly tell TS: "Get the topic, and treat it as an object that has lessons."
-  const topic = category?.topics[topicKey as keyof typeof category.topics] as { 
-    title: string, 
-    lessons: { id: string, title: string }[] 
-  } | undefined;
-
-  // 3. Extract lessons safely
+  const topic = category?.topics[topicKey as keyof typeof category.topics] as any;
   const allLessons = topic?.lessons || [];
 
-  // 4. Unlock Logic (1 lesson per 5 mins)
+  // 2. Unlock Logic: 1 lesson per 5 mins
   const minutes = parseInt(timeLimit || "5");
-  const limit = minutes / 5;
+  const limit = Math.floor(minutes / 5);
   const unlocked = allLessons.slice(0, limit);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>{topic?.title || "Lessons"}</Text>
-      <Text style={styles.goalText}>
-        Target: {minutes} mins • {unlocked.length} lessons unlocked
-      </Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.heading}>{topic?.title || "Lessons"}</Text>
+        <View style={styles.badgeRow}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{minutes} MIN SESSION</Text>
+          </View>
+          <Text style={styles.subtext}>{unlocked.length} modules unlocked</Text>
+        </View>
+      </View>
       
       <FlatList
         data={unlocked}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.lessonCard}>
-            <Text style={styles.lessonTitle}>{item.title}</Text>
-            <Text style={styles.lessonSubtitle}>5 minute session</Text>
-          </View>
+        contentContainerStyle={styles.list}
+        renderItem={({ item, index }) => (
+          <TouchableOpacity 
+            style={styles.lessonCard} 
+            onPress={() => router.push({
+              pathname: '/lesson-details',
+              params: { 
+                lessonId: item.id, 
+                lessonTitle: item.title,
+                topicTitle: topic?.title 
+              }
+            })}
+          >
+            <View style={styles.indexCircle}>
+              <Text style={styles.indexText}>{index + 1}</Text>
+            </View>
+            <View style={styles.cardInfo}>
+              <Text style={styles.lessonTitle}>{item.title}</Text>
+              <Text style={styles.lessonMeta}>5 minute snack</Text>
+            </View>
+            <Ionicons name="play-circle" size={24} color="#007AFF" />
+          </TouchableOpacity>
         )}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#fff', paddingTop: 60 },
-  heading: { fontSize: 26, fontWeight: 'bold' },
-  goalText: { fontSize: 16, color: '#4CAF50', fontWeight: '600', marginBottom: 25 },
+  container: { flex: 1, backgroundColor: '#fff' },
+  header: { padding: 25, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  heading: { fontSize: 28, fontWeight: '900', color: '#1a1a1a' },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  badge: { backgroundColor: '#E3F2FD', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, marginRight: 10 },
+  badgeText: { color: '#007AFF', fontSize: 12, fontWeight: 'bold' },
+  subtext: { color: '#666', fontSize: 14 },
+  list: { padding: 20 },
   lessonCard: { 
-    padding: 20, 
-    backgroundColor: '#f0f7ff', 
-    borderRadius: 15, 
-    marginBottom: 15,
-    borderLeftWidth: 5,
-    borderLeftColor: '#007AFF'
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#F8F9FA', 
+    padding: 18, 
+    borderRadius: 16, 
+    marginBottom: 12 
   },
-  lessonTitle: { fontSize: 18, color: '#0056b3', fontWeight: '600' },
-  lessonSubtitle: { fontSize: 14, color: '#666', marginTop: 4 }
+  indexCircle: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' },
+  indexText: { fontWeight: 'bold', color: '#555' },
+  cardInfo: { flex: 1, marginLeft: 15 },
+  lessonTitle: { fontSize: 17, fontWeight: '700', color: '#333' },
+  lessonMeta: { fontSize: 13, color: '#888', marginTop: 2 }
 });
