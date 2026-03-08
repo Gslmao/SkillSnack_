@@ -1,0 +1,164 @@
+CREATE TABLE categories (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL
+);
+
+CREATE TABLE questions (
+  id SERIAL PRIMARY KEY,
+  category_id TEXT REFERENCES categories(id),
+  question TEXT NOT NULL,
+  options TEXT[] NOT NULL,
+  correct INTEGER NOT NULL
+);
+
+-- Categories
+INSERT INTO categories (id, name) VALUES
+  ('f1', 'Finance: Stock Market - Basics'),
+  ('f2', 'Finance: Stock Market - Exchanges'),
+  ('f3', 'Finance: Stock Market - Orders'),
+  ('s1', 'Science: Newton''s Laws - First Law'),
+  ('s2', 'Science: Newton''s Laws - Second Law'),
+  ('m1', 'Maths: Calculus');
+
+-- f1 questions
+INSERT INTO questions (category_id, question, options, correct) VALUES
+  ('f1', 'What does owning a stock represent?', ARRAY['A loan to the company', 'Ownership in a company', 'A government bond', 'A bank deposit'], 1),
+  ('f1', 'Why do companies issue stocks?', ARRAY['To repay debt', 'To raise capital', 'To pay taxes', 'To increase inflation'], 1),
+  ('f1', 'If you buy 100 shares and price rises ₹10, your profit is:', ARRAY['₹10', '₹100', '₹1,000', '₹10,000'], 2),
+  ('f1', 'Dividends are:', ARRAY['Taxes paid by investors', 'Profit shared with shareholders', 'Loan interest', 'Government fees'], 1),
+  ('f1', 'Public companies allow:', ARRAY['Anyone to buy shares', 'Only founders to own shares', 'Only banks to invest', 'Government ownership'], 0);
+
+-- f2 questions
+INSERT INTO questions (category_id, question, options, correct) VALUES
+  ('f2', 'A stock exchange is:', ARRAY['A bank', 'A trading marketplace', 'A government agency', 'A brokerage firm'], 1),
+  ('f2', 'Price discovery means:', ARRAY['Government setting prices', 'Prices determined by supply and demand', 'Random price changes', 'Fixed prices'], 1),
+  ('f2', 'Liquidity means:', ARRAY['Amount of water in market', 'Ease of buying or selling assets', 'Tax rate', 'Company profit'], 1),
+  ('f2', 'Institutional investors include:', ARRAY['Students', 'Mutual funds', 'Teachers', 'Shop owners'], 1),
+  ('f2', 'Exchanges match:', ARRAY['Buyers and sellers', 'Companies and banks', 'Governments and investors', 'Brokers and regulators'], 0);
+
+-- f3 questions
+INSERT INTO questions (category_id, question, options, correct) VALUES
+  ('f3', 'Market orders execute:', ARRAY['At a fixed price', 'Immediately at best price', 'After one day', 'Only at closing price'], 1),
+  ('f3', 'Limit orders allow you to:', ARRAY['Control price', 'Control company profit', 'Set dividends', 'Set taxes'], 0),
+  ('f3', 'If stock price is ₹200 and you set buy limit ₹180:', ARRAY['Order executes immediately', 'Order waits until price hits ₹180', 'Order cancels', 'Order doubles'], 1),
+  ('f3', 'Market orders prioritize:', ARRAY['Price', 'Speed', 'Dividends', 'Liquidity'], 1),
+  ('f3', 'Limit orders may:', ARRAY['Execute instantly always', 'Never execute', 'Guarantee profit', 'Set company value'], 1);
+
+-- s1 questions
+INSERT INTO questions (category_id, question, options, correct) VALUES
+  ('s1', 'Inertia is the tendency to:', ARRAY['Speed up', 'Change color', 'Resist changes in motion', 'Fall'], 2),
+  ('s1', 'An object at rest stays at rest unless acted on by:', ARRAY['A vacuum', 'An unbalanced force', 'Constant velocity', 'Inertia'], 1);
+
+-- s2 questions
+INSERT INTO questions (category_id, question, options, correct) VALUES
+  ('s2', 'Newton''s Second Law formula:', ARRAY['E = mc²', 'A² + B² = C²', 'F = ma', 'V = IR'], 2),
+  ('s2', 'If you double the force, acceleration:', ARRAY['Stays same', 'Doubles', 'Halves', 'Zero'], 1);
+
+-- m1 questions
+INSERT INTO questions (category_id, question, options, correct) VALUES
+  ('m1', 'A ''limit'' describes behavior:', ARRAY['At zero', 'As it approaches a value', 'At infinity', 'When broken'], 1),
+  ('m1', 'If a function has no holes, it is:', ARRAY['Differentiable', 'Continuous', 'Infinite', 'Negative'], 1);
+
+
+-- Create tables
+CREATE TABLE lessons (
+  id TEXT PRIMARY KEY,
+  body TEXT NOT NULL,
+  tip TEXT NOT NULL,
+  animation_key TEXT
+);
+
+CREATE TABLE lesson_visual_steps (
+  id SERIAL PRIMARY KEY,
+  lesson_id TEXT REFERENCES lessons(id),
+  step_order INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  animation_key TEXT,
+  icon TEXT
+);
+
+-- Insert lessons
+INSERT INTO lessons (id, body, tip, animation_key) VALUES
+(
+  'f1',
+  '**The "Business Pizza" Deal** 
+
+Imagine your friend, Bob, starts a **Pizza Shop**. He has a secret sauce that everyone loves, but he needs ₹10 Lakhs to buy a massive industrial oven and a delivery bike. He doesn''t have that kind of cash.
+
+Instead of going to a bank and paying back a boring loan with high interest, he decides to sell **"Slices" of the business.** He divides his shop into 1,000 tiny pieces called **Stocks**.
+
+By buying one piece for ₹1,000, you aren''t just a customer; you are now a **Partial Owner**. If Bob''s pizza becomes the next big global chain, your tiny ₹1,000 slice could be worth a fortune! When the shop makes a profit at the end of the month, Bob sends a tiny bit of that cash straight to you.',
+  'Owning a stock makes you the boss (well, a very tiny boss) of the company!',
+  'trade'
+),
+(
+  'f2',
+  '**The Digital Veggie Market** 
+
+A Stock Exchange is basically a high-tech, giant marketplace. Think of it like a local vegetable market (Mandi), but instead of shouting about potatoes and tomatoes, people are shouting about buying pieces of **Apple**, **Google**, or **Tesla**.
+
+In the old days, people actually stood in a room and screamed prices at each other. Today, it''s all done by super-fast computers in milliseconds. The Exchange acts as the **Ultimate Middleman**. It ensures that if you want to sell your ''Pizza Slice'', there is a verified buyer waiting, and nobody gets cheated on the price. It''s a 24/7 engine of fairness that keeps the global economy moving.',
+  'The exchange acts as a neutral middleman to ensure fairness for everyone.',
+  'receive_order'
+),
+(
+  'f3',
+  '**The "Fast vs. Picky" Orders** 
+
+When you decide to buy a stock, you have to choose your ''shopping style''.
+
+**Market Order (The "I Need it Now" Guy):** You tell the market, "I don''t care about the price, just give me that stock immediately!" You get the stock in a fraction of a second, but you might pay ₹102 even if the price was ₹100 a second ago because the market moves so fast.
+
+**Limit Order (The "Bargain Hunter"):** You are picky. You tell the market, "I will only buy this stock if the price hits ₹95 or lower." You might have to wait all day, or the trade might never happen if the price stays high, but you have total control over your money.',
+  'Use Limit Orders to avoid overpaying when the market is moving fast!',
+  'speedometer'
+),
+(
+  's1',
+  '**The Couch Potato Law** 
+
+Newton''s First Law, also known as **Inertia**, basically says that all objects in the universe are fundamentally lazy. If you are curled up on a couch watching Netflix, you will stay there forever unless an "External Force" (like your mom yelling or the house catching fire) makes you move.
+
+The same works in reverse! If you throw a ball in outer space where there is no air or friction, it will keep flying in a straight line at the same speed forever. On Earth, things only stop because ''invisible forces'' like air resistance and friction act like a constant brake.',
+  'This is why you lurch forward when a car suddenly brakes—your body wants to keep moving!',
+  'trade'
+),
+(
+  's2',
+  '**The "Heavy Push" Rule** 
+
+Newton''s Second Law ($F = ma$) is the math behind every movement. It tells us that Force is a combination of how heavy something is (**Mass**) and how fast you want it to speed up (**Acceleration**).
+
+Think about it: if you want to push a small bicycle, a tiny nudge will send it flying. But if you want to push a massive semi-truck at the same speed, you''d need the strength of an entire army. The heavier the object, the more "oomph" you need to get it going. If you apply the same force to a pebble and a boulder, the pebble will zoom away while the boulder barely flinches.',
+  'It''s harder to push a heavy truck than a small bicycle because of the mass!',
+  'trade'
+),
+(
+  'm1',
+  '**The "Almost There" Rule** 
+
+In Math, **Limits** are the ultimate "tease". They describe what happens when you get infinitely close to a value without ever actually touching it.
+
+Imagine you are standing 2 meters away from a wall. Every second, you walk half the remaining distance. First you''re 1m away, then 50cm, then 25cm... Mathematically, you will keep getting closer forever, but you will **never** actually hit the wall. A Limit is the number you are ''approaching'' as you continue that journey. Without limits, we wouldn''t have Calculus, and without Calculus, we wouldn''t have modern physics or engineering!',
+  'Limits are the ''gatekeepers'' of Calculus; you can''t have derivatives without them.',
+  'trade'
+);
+
+-- Insert visual steps
+INSERT INTO lesson_visual_steps (lesson_id, step_order, title, description, animation_key, icon) VALUES
+('f1', 1, 'Price Appreciation', 'As the shop opens more branches, more people want to own a piece. This demand makes your ₹1,000 slice worth ₹5,000!', 'profit_growth', NULL),
+('f1', 2, 'Dividends', 'Think of this as a ''thank you'' bonus. Bob shares the monthly profit with you in actual cash.', 'gift_box', NULL),
+
+('f2', 1, 'Price Discovery', 'It''s like a tug-of-war. If 1,000 people want to buy and only 10 want to sell, the price rockets up instantly!', NULL, 'stats-chart'),
+('f2', 2, 'Liquidity', 'Liquidity is how fast you can turn your stock back into cash. In a busy exchange, you can sell in the blink of an eye!', NULL, 'flashlight'),
+
+('f3', 1, 'Market Order = Speed', 'Guarantees your trade happens instantly, but doesn''t guarantee the exact price. Best for urgent moves!', NULL, 'flash'),
+('f3', 2, 'Limit Order = Control', 'Guarantees your price, but doesn''t guarantee the trade will ever happen. Best for patient investors!', NULL, 'options'),
+
+('s1', 1, 'Objects at Rest', 'A football on the grass is perfectly happy staying still for 100 years unless someone kicks it.', NULL, 'stop-circle'),
+('s1', 2, 'Objects in Motion', 'A puck on ice slides much further because there''s less ''friction'' trying to be a party pooper!', NULL, 'speedometer'),
+
+('s2', 1, 'Force & Mass', 'More Mass = More Struggle. If you double the weight, you need double the muscle to keep the same speed!', NULL, 'barbell'),
+
+('m1', 1, 'Infinite Closeness', 'As you get closer to a point, the gap becomes so small it basically becomes zero.', NULL, 'calculator');

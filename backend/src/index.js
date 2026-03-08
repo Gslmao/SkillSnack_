@@ -357,6 +357,97 @@ app.post("/users/streak", authMiddleware, async (req, res) => {
   }
 });
 
+// Get all categories
+app.get("/content/categories", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("categories")
+      .select("*");
+
+    if (error) return res.status(500).json({ error: "Failed to fetch categories." });
+    return res.json({ categories: data });
+  } catch (err) {
+    console.error("Error in /content/categories:", err);
+    return res.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// Get questions for a category/quiz
+// e.g. GET /content/questions/f1
+app.get("/content/questions/:categoryId", async (req, res) => {
+  const { categoryId } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from("questions")
+      .select("*")
+      .eq("category_id", categoryId)
+      .order("id");
+
+    if (error) return res.status(500).json({ error: "Failed to fetch questions." });
+    if (!data.length) return res.status(404).json({ error: "No questions found for this category." });
+
+    return res.json({ categoryId, questions: data });
+  } catch (err) {
+    console.error("Error in /content/questions/:categoryId:", err);
+    return res.status(500).json({ error: "Internal server error." });
+  }
+});
+
+// Get lesson for a module
+// e.g. GET /content/lesson/f1
+app.get("/content/lesson/:lessonId", async (req, res) => {
+  const { lessonId } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from("lessons")
+      .select("*, lesson_visual_steps(*)")
+      .eq("id", lessonId)
+      .single();
+
+    if (error) return res.status(500).json({ error: "Failed to fetch lesson." });
+    if (!data) return res.status(404).json({ error: "Lesson not found." });
+
+    return res.json({ lesson: data });
+  } catch (err) {
+    console.error("Error in /content/lesson/:lessonId:", err);
+    return res.status(500).json({ error: "Internal server error." });
+  }
+});
+
+app.get("/content/module/:moduleId", async (req, res) => {
+  const { moduleId } = req.params;
+
+  try {
+    const [lessonRes, questionsRes] = await Promise.all([
+      supabase
+        .from("lessons")
+        .select("*, lesson_visual_steps(*)")
+        .eq("id", moduleId)
+        .single(),
+      supabase
+        .from("questions")
+        .select("*")
+        .eq("category_id", moduleId)
+        .order("id"),
+    ]);
+
+    if (lessonRes.error) return res.status(500).json({ error: "Failed to fetch lesson." });
+    if (questionsRes.error) return res.status(500).json({ error: "Failed to fetch questions." });
+    if (!lessonRes.data) return res.status(404).json({ error: "Module not found." });
+
+    return res.json({
+      moduleId,
+      lesson: lessonRes.data,
+      questions: questionsRes.data,
+    });
+  } catch (err) {
+    console.error("Error in /content/module/:moduleId:", err);
+    return res.status(500).json({ error: "Internal server error." });
+  }
+});
+
 app.listen(port, () => {
   console.log(`SkillSnack backend listening on port ${port}`);
 });
