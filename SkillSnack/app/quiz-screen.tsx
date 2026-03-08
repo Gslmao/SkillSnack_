@@ -206,6 +206,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { QUIZ_DATA } from '../data/quizData';
+import { useAuth } from '@/context/AuthContext';
 
 // 1. Requirements at top level for Metro bundler
 const CORRECT_SFX = require('./correct.mpeg');
@@ -225,6 +226,7 @@ const COLORS = {
 export default function QuizScreen() {
   const router = useRouter();
   const { lessonId, lessonTitle } = useLocalSearchParams<{ lessonId: string; lessonTitle: string }>();
+  const { addLessonXp } = useAuth();
 
   const questions = QUIZ_DATA[lessonId as string] || [];
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -295,6 +297,24 @@ export default function QuizScreen() {
   const baseLessonXP = 10;
   const quizBonusXP = score * 5;
   const totalEarned = baseLessonXP + quizBonusXP;
+
+  // Award XP once when the quiz is finished
+  useEffect(() => {
+    if (!isFinished) return;
+    if (!lessonId) return;
+
+    const lessonKey = String(lessonId);
+    const amount = totalEarned;
+    if (!Number.isFinite(amount) || amount <= 0) return;
+
+    (async () => {
+      try {
+        await addLessonXp(amount, { sync: true, lessonId: lessonKey });
+      } catch (e) {
+        console.warn('Failed to award lesson XP', e);
+      }
+    })();
+  }, [isFinished, lessonId, totalEarned, addLessonXp]);
 
   if (isFinished) {
     return (

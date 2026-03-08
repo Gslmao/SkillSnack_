@@ -1,8 +1,8 @@
 import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { FlatList, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const COLORS = {
   PRIMARY: '#10B981',      // Neon Comical Green
@@ -21,20 +21,11 @@ const CATEGORIES = [
 
 export default function CategoryScreen() {
   const router = useRouter();
-  const [menuVisible, setMenuVisible] = useState(false);
   const {
     user,
     session,
     initializing,
-    xp,
-    pendingXp,
-    streak,
-    syncXp,
-    refreshXpFromServer,
-    signOut,
   } = useAuth();
-  const [syncing, setSyncing] = useState(false);
-  const [showStreakHint, setShowStreakHint] = useState(false);
 
   // Guard: if not logged in, redirect to login screen.
   useEffect(() => {
@@ -44,44 +35,6 @@ export default function CategoryScreen() {
     }
   }, [initializing, user, session, router]);
 
-  const handleLogout = async () => {
-    setMenuVisible(false);
-    await signOut();
-    router.replace('/login');
-  };
-
-  const handleSyncXp = async () => {
-    if (syncing) return;
-    if (!user || !(user as any).id) {
-      // Not properly logged in - try refresh to pull server state
-      try {
-        setSyncing(true);
-        const result = await refreshXpFromServer();
-        if (!result.success && result.error) {
-          Alert.alert("Sync failed", result.error);
-        }
-      } finally {
-        setSyncing(false);
-      }
-      return;
-    }
-    try {
-      setSyncing(true);
-      const result =
-        pendingXp > 0
-          ? await syncXp()
-          : await refreshXpFromServer();
-      if (!result.success && result.error) {
-        const msg =
-          result.error === "No pending XP to sync"
-            ? "Nothing to sync. XP is up to date."
-            : result.error;
-        Alert.alert("Sync failed", msg);
-      }
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const renderCategory = ({ item }: { item: typeof CATEGORIES[0] }) => (
     <TouchableOpacity 
@@ -119,61 +72,6 @@ export default function CategoryScreen() {
         </View>
         
         <View style={styles.headerActions}>
-          {user && (
-            <>
-              <View style={styles.streakWrapper}>
-                <TouchableOpacity
-                  style={styles.streakBar}
-                  activeOpacity={0.8}
-                  onPress={() => setShowStreakHint((v) => !v)}
-                >
-                  {Array.from({ length: 5 }).map((_, index) => {
-                    const isActive = streak >= index + 1;
-                    return (
-                      <View
-                        key={index}
-                        style={[
-                          styles.streakDot,
-                          isActive ? styles.streakDotActive : styles.streakDotInactive,
-                        ]}
-                      />
-                    );
-                  })}
-                  <Text style={styles.streakText}>{streak}d</Text>
-                </TouchableOpacity>
-                {showStreakHint && (
-                  <View style={styles.streakTooltip}>
-                    <Text style={styles.streakTooltipText}>
-                      You have {streak === 1 ? '1 day' : `${streak} days`} streak!
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.xpWrapper}>
-                <View style={styles.xpBar}>
-                  <Ionicons name="flash" size={14} color="#FBBF24" />
-                  <Text style={styles.xpText}>{xp} XP</Text>
-                  {pendingXp > 0 && <View style={styles.xpPendingDot} />}
-                </View>
-                <TouchableOpacity
-                  style={[styles.syncBtn, syncing && styles.syncBtnDisabled]}
-                  onPress={handleSyncXp}
-                  disabled={syncing}
-                >
-                  <Ionicons
-                    name={pendingXp > 0 ? "cloud-upload-outline" : "refresh"}
-                    size={14}
-                    color={syncing ? "#9CA3AF" : COLORS.DARK_BG}
-                  />
-                  <Text style={styles.syncBtnText}>
-                    {syncing ? "Syncing" : pendingXp > 0 ? "Sync XP" : "Refresh"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          )}
-
           <TouchableOpacity 
             style={styles.leaderboardBtn}
             onPress={() => router.push('/leaderboard')} 
@@ -185,38 +83,15 @@ export default function CategoryScreen() {
           <View>
             <TouchableOpacity 
               style={styles.profileBtn} 
-              onPress={() => setMenuVisible(!menuVisible)}
+              onPress={() => router.push('/profile')}
             >
-              <View style={[styles.avatarFrame, menuVisible && styles.avatarFrameActive]}>
-                 <Ionicons name="person" size={20} color={menuVisible ? COLORS.PRIMARY : COLORS.TEXT_SUB} />
+              <View style={styles.avatarFrame}>
+                 <Ionicons name="person" size={20} color={COLORS.TEXT_SUB} />
               </View>
             </TouchableOpacity>
-
-            {menuVisible && (
-              <View style={styles.dropdownMenu}>
-                <TouchableOpacity style={styles.dropdownItem}>
-                  <Ionicons name="person-outline" size={18} color={COLORS.TEXT_SUB} />
-                  <Text style={styles.dropdownText}>Profile</Text>
-                </TouchableOpacity>
-                <View style={styles.divider} />
-                <TouchableOpacity style={styles.dropdownItem}>
-                  <Ionicons name="ribbon-outline" size={18} color={COLORS.TEXT_SUB} />
-                  <Text style={styles.dropdownText}>Badges</Text>
-                </TouchableOpacity>
-                <View style={styles.divider} />
-                <TouchableOpacity style={styles.dropdownItem}>
-                  <Ionicons name="settings-outline" size={18} color={COLORS.TEXT_SUB} />
-                  <Text style={styles.dropdownText}>Settings</Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
         </View>
       </View>
-
-      {menuVisible && (
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenuVisible(false)} />
-      )}
 
       {/* Greeting Section */}
       <View style={styles.welcomeSection}>
