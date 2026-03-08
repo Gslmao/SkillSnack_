@@ -1,3 +1,4 @@
+import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -12,10 +13,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useAuth } from "@/context/AuthContext";
 
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 export default function LoginScreen() {
   const router = useRouter();

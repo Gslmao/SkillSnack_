@@ -5,8 +5,22 @@ import { supabase } from "./supabaseClient.js";
 
 dotenv.config();
 
+// Derive port from EXPO_PUBLIC_API_BASE_URL so frontend and backend stay in sync
+function getPortFromApiBaseUrl() {
+  const url = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return parsed.port ? parseInt(parsed.port, 10) : null;
+  } catch {
+    return null;
+  }
+}
+
+const port =
+  getPortFromApiBaseUrl() || process.env.PORT || 4000;
+
 const app = express();
-const port = process.env.PORT || 4000;
 
 // Streak logic helper
 function calculateStreak(currentStreak, lastActive) {
@@ -45,6 +59,8 @@ app.use(
       callback(null, true);
     },
     credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   })
 );
 app.use(express.json());
@@ -175,10 +191,12 @@ app.post("/auth/logout", (_req, res) => {
 
 // Current user profile from "users" table (includes XP & streak)
 app.get("/users/me", authMiddleware, async (req, res) => {
-  const userId = req.user?.id;
+  const userId = req.user?.id ?? req.user?.sub;
 
   if (!userId) {
-    return res.status(400).json({ error: "Missing user id on auth context." });
+    return res
+      .status(400)
+      .json({ error: "Missing user id on auth context." });
   }
 
   try {
@@ -204,22 +222,37 @@ app.get("/users/me", authMiddleware, async (req, res) => {
   }
 });
 
-// Increment user XP
-// Body: { userId: string (uuid), amount: number }
-app.post("/users/xp", async (req, res) => {
-  const { userId, amount } = req.body || {};
+// Increment user XP (requires auth – users can only add XP to themselves)
+// Body: { amount: number }
+app.post("/users/xp", authMiddleware, async (req, res) => {
+  const userId = req.user?.id ?? req.user?.sub;
+  const { amount } = req.body || {};
 
-  if (!userId || amount === undefined) {
+  if (!userId) {
     return res
       .status(400)
-      .json({ error: "userId and amount are required." });
+      .json({
+        error: "Missing user id on auth context.",
+      });
+  }
+
+  if (amount === undefined || amount === null) {
+    return res.status(400).json({ error: "amount is required." });
   }
 
   const increment = Number(amount);
-  if (!Number.isFinite(increment) || !Number.isInteger(increment)) {
+  if (!Number.isFinite(increment) || !Number.isInteger(increment) || increment < 0) {
     return res
       .status(400)
-      .json({ error: "amount must be a valid integer." });
+      .json({ error: "amount must be a non-negative integer." });
+  }
+
+  // Cap XP per request to prevent abuse (max 50 per lesson/quiz)
+  const MAX_XP_PER_REQUEST = 50;
+  const cappedIncrement = Math.min(increment, MAX_XP_PER_REQUEST);
+
+  if (cappedIncrement === 0) {
+    return res.status(400).json({ error: "amount must be at least 1." });
   }
 
   try {
@@ -240,7 +273,7 @@ app.post("/users/xp", async (req, res) => {
     }
 
     const currentXp = user.xp || 0;
-    const newXp = currentXp + increment;
+    const newXp = currentXp + cappedIncrement;
 
     // Update only xp (streak and other fields left unchanged)
     const { data: updatedUser, error: updateError } = await supabase
@@ -255,20 +288,21 @@ app.post("/users/xp", async (req, res) => {
       return res.status(500).json({ error: "Failed to update XP." });
     }
 
-    return res.json({ user: updatedUser });
+    return res.json({ user: updatedUser, amountAdded: cappedIncrement });
   } catch (err) {
     console.error("Unexpected error in /users/xp:", err);
     return res.status(500).json({ error: "Internal server error." });
   }
 });
 
-// Call this when a user completes a lesson to update streak.
-// Body: { userId: string }
-app.post("/users/streak", async (req, res) => {
-  const { userId } = req.body || {};
+// Call this when a user completes a lesson to update streak (requires auth).
+app.post("/users/streak", authMiddleware, async (req, res) => {
+  const userId = req.user?.id ?? req.user?.sub;
 
   if (!userId) {
-    return res.status(400).json({ error: "userId is required." });
+    return res
+      .status(400)
+      .json({ error: "Missing user id on auth context." });
   }
 
   try {
