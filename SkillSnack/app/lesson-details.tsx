@@ -157,10 +157,13 @@ const COLORS = {
 
 export default function LessonDetailsScreen() {
   const router = useRouter();
-  const { lessonId, lessonTitle, topicTitle } = useLocalSearchParams<{ 
+  const { lessonId, lessonTitle, topicTitle, categoryKey, topicKey, timeLimit } = useLocalSearchParams<{ 
     lessonId: string; 
     lessonTitle: string; 
-    topicTitle: string; 
+    topicTitle: string;
+    categoryKey?: string;
+    topicKey?: string;
+    timeLimit?: string;
   }>();
 
   const content = LESSON_DETAILS_CONTENT[lessonId as string] || {
@@ -270,7 +273,17 @@ export default function LessonDetailsScreen() {
         {/* CTA Button */}
         <TouchableOpacity 
           style={styles.ctaButton} 
-          onPress={() => router.push({ pathname: '/quiz-screen', params: { lessonId } })}
+          onPress={() => router.push({
+            pathname: '/quiz-screen',
+            params: {
+              lessonId,
+              lessonTitle: lessonTitle ?? '',
+              topicTitle: topicTitle ?? '',
+              categoryKey: categoryKey ?? '',
+              topicKey: topicKey ?? '',
+              timeLimit: timeLimit ?? '5',
+            },
+          })}
         >
           <Text style={styles.ctaText}>Start Knowledge Check</Text>
           <Ionicons name="arrow-forward" size={20} color={COLORS.DARK_BG} />

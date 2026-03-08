@@ -155,7 +155,10 @@ export default function LessonScreen() {
               params: { 
                 lessonId: item.id, 
                 lessonTitle: item.title,
-                topicTitle: topic?.title 
+                topicTitle: topic?.title,
+                categoryKey,
+                topicKey,
+                timeLimit: timeLimit || '5',
               }
             })}
           >

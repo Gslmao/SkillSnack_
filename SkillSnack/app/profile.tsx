@@ -1,7 +1,8 @@
 import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Alert,
   SafeAreaView,
@@ -34,6 +35,20 @@ export default function ProfileScreen() {
     signOut,
   } = useAuth();
   const [syncing, setSyncing] = useState(false);
+
+   // Whenever the user opens the profile screen, refresh XP/streak from the server
+   useFocusEffect(
+     useCallback(() => {
+       if (user) {
+         // If there is pending XP, sync it first; otherwise refresh from cloud.
+         if (pendingXp > 0) {
+           syncXp();
+         } else {
+           refreshXpFromServer();
+         }
+       }
+     }, [user, pendingXp, refreshXpFromServer, syncXp])
+   );
 
   const handleSyncXp = async () => {
     if (syncing) return;
