@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { learningData } from '../data/learningData';
 import { useAuth } from '@/context/AuthContext';
@@ -183,10 +183,16 @@ export default function QuizScreen() {
     }
   };
 
+  const xpAwarded = useRef(false); // 👈 add this ref
+
   useEffect(() => {
     if (!isFinished || !lessonId) return;
+    if (xpAwarded.current) return; // 👈 guard against repeat calls
+    
     const amount = totalEarned;
     if (!Number.isFinite(amount) || amount <= 0) return;
+
+    xpAwarded.current = true; // 👈 mark as done immediately before async call
 
     (async () => {
       try {
@@ -195,8 +201,8 @@ export default function QuizScreen() {
         console.warn('Failed to award lesson XP', e);
       }
     })();
-  }, [isFinished, lessonId, totalEarned, addLessonXp]);
-
+  }, [isFinished]); // 👈 only depend on isFinished, nothing else
+   
   // Loading state
   if (isLoading) {
     return (
