@@ -1,8 +1,7 @@
-import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { FlatList, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const COLORS = {
   PRIMARY: '#10B981',      // Neon Comical Green
@@ -22,66 +21,6 @@ const CATEGORIES = [
 export default function CategoryScreen() {
   const router = useRouter();
   const [menuVisible, setMenuVisible] = useState(false);
-  const {
-    user,
-    session,
-    initializing,
-    xp,
-    pendingXp,
-    streak,
-    syncXp,
-    refreshXpFromServer,
-    signOut,
-  } = useAuth();
-  const [syncing, setSyncing] = useState(false);
-  const [showStreakHint, setShowStreakHint] = useState(false);
-
-  // Guard: if not logged in, redirect to login screen.
-  useEffect(() => {
-    if (initializing) return;
-    if (!user || !session) {
-      router.replace('/login');
-    }
-  }, [initializing, user, session, router]);
-
-  const handleLogout = async () => {
-    setMenuVisible(false);
-    await signOut();
-    router.replace('/login');
-  };
-
-  const handleSyncXp = async () => {
-    if (syncing) return;
-    if (!user || !(user as any).id) {
-      // Not properly logged in - try refresh to pull server state
-      try {
-        setSyncing(true);
-        const result = await refreshXpFromServer();
-        if (!result.success && result.error) {
-          Alert.alert("Sync failed", result.error);
-        }
-      } finally {
-        setSyncing(false);
-      }
-      return;
-    }
-    try {
-      setSyncing(true);
-      const result =
-        pendingXp > 0
-          ? await syncXp()
-          : await refreshXpFromServer();
-      if (!result.success && result.error) {
-        const msg =
-          result.error === "No pending XP to sync"
-            ? "Nothing to sync. XP is up to date."
-            : result.error;
-        Alert.alert("Sync failed", msg);
-      }
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const renderCategory = ({ item }: { item: typeof CATEGORIES[0] }) => (
     <TouchableOpacity 
@@ -119,61 +58,6 @@ export default function CategoryScreen() {
         </View>
         
         <View style={styles.headerActions}>
-          {user && (
-            <>
-              <View style={styles.streakWrapper}>
-                <TouchableOpacity
-                  style={styles.streakBar}
-                  activeOpacity={0.8}
-                  onPress={() => setShowStreakHint((v) => !v)}
-                >
-                  {Array.from({ length: 5 }).map((_, index) => {
-                    const isActive = streak >= index + 1;
-                    return (
-                      <View
-                        key={index}
-                        style={[
-                          styles.streakDot,
-                          isActive ? styles.streakDotActive : styles.streakDotInactive,
-                        ]}
-                      />
-                    );
-                  })}
-                  <Text style={styles.streakText}>{streak}d</Text>
-                </TouchableOpacity>
-                {showStreakHint && (
-                  <View style={styles.streakTooltip}>
-                    <Text style={styles.streakTooltipText}>
-                      You have {streak === 1 ? '1 day' : `${streak} days`} streak!
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.xpWrapper}>
-                <View style={styles.xpBar}>
-                  <Ionicons name="flash" size={14} color="#FBBF24" />
-                  <Text style={styles.xpText}>{xp} XP</Text>
-                  {pendingXp > 0 && <View style={styles.xpPendingDot} />}
-                </View>
-                <TouchableOpacity
-                  style={[styles.syncBtn, syncing && styles.syncBtnDisabled]}
-                  onPress={handleSyncXp}
-                  disabled={syncing}
-                >
-                  <Ionicons
-                    name={pendingXp > 0 ? "cloud-upload-outline" : "refresh"}
-                    size={14}
-                    color={syncing ? "#9CA3AF" : COLORS.DARK_BG}
-                  />
-                  <Text style={styles.syncBtnText}>
-                    {syncing ? "Syncing" : pendingXp > 0 ? "Sync XP" : "Refresh"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          )}
-
           <TouchableOpacity 
             style={styles.leaderboardBtn}
             onPress={() => router.push('/leaderboard')} 
@@ -329,94 +213,4 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 18, fontWeight: '800', color: COLORS.TEXT_MAIN, letterSpacing: -0.5 },
   cardSubtitle: { fontSize: 14, color: COLORS.TEXT_SUB, marginTop: 4, fontWeight: '500' },
   arrowCircle: { width: 34, height: 34, borderRadius: 12, backgroundColor: COLORS.DARK_BG, justifyContent: 'center', alignItems: 'center' },
-
-  streakWrapper: { alignItems: 'flex-end' },
-  streakBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.DARK_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-  },
-  streakDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  streakDotActive: {
-    backgroundColor: '#22C55E',
-  },
-  streakDotInactive: {
-    backgroundColor: '#4B5563',
-  },
-  streakText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#F9FAFB',
-  },
-  streakTooltip: {
-    marginTop: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: COLORS.DARK_BG,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-  },
-  streakTooltipText: {
-    fontSize: 11,
-    color: '#E5E7EB',
-  },
-
-  xpWrapper: { alignItems: 'flex-end', marginRight: 8 },
-  xpBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#111827',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-  },
-  xpText: { fontSize: 12, fontWeight: '700', color: '#F9FAFB' },
-  xpPendingDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: COLORS.PRIMARY,
-  },
-  syncBtn: {
-    marginTop: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: '#E5E7EB',
-    gap: 4,
-  },
-  syncBtnDisabled: {
-    opacity: 0.6,
-  },
-  syncBtnText: { fontSize: 10, fontWeight: '600', color: COLORS.DARK_BG },
-
-  // Fix leaderboard route issue
-  leaderboardBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.2)',
-  },
-  leaderboardText: { fontSize: 12, fontWeight: '900', color: COLORS.AMBER, letterSpacing: 0.5 },
 });

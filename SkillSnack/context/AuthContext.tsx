@@ -1,11 +1,11 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useState,
+} from "react";
 
 type SupabaseSession = {
   access_token: string;
@@ -32,8 +32,12 @@ type AuthContextValue = AuthState & {
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
   xp: number;
   pendingXp: number;
-  addLessonXp: (amount: number, options?: { sync?: boolean }) => Promise<void>;
-  syncXp: () => Promise<void>;
+  addLessonXp: (
+    amount: number,
+    options?: { sync?: boolean; lessonId?: string }
+  ) => Promise<void>;
+  syncXp: () => Promise<{ success: boolean; error?: string }>;
+  refreshXpFromServer: () => Promise<{ success: boolean; error?: string }>;
    streak: number;
    bestStreak: number;
    updateStreak: () => Promise<void>;
@@ -41,8 +45,8 @@ type AuthContextValue = AuthState & {
 
 const AUTH_STORAGE_KEY = "skillsnack_auth_session";
 const XP_STORAGE_KEY_PREFIX = "skillsnack_xp_";
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+const COMPLETED_LESSONS_KEY_PREFIX = "skillsnack_completed_lessons_";
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -94,6 +98,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const getCompletedLessonsForUser = useCallback(
+    async (userId: string): Promise<Set<string>> => {
+      const key = `${COMPLETED_LESSONS_KEY_PREFIX}${userId}`;
+      try {
+        const stored = await AsyncStorage.getItem(key);
+        if (!stored) return new Set();
+        const parsed = JSON.parse(stored) as string[];
+        return new Set(Array.isArray(parsed) ? parsed : []);
+      } catch (e) {
+        console.warn("Failed to load completed lessons", e);
+        return new Set();
+      }
+    },
+    []
+  );
+
+  const markLessonCompletedForUser = useCallback(
+    async (userId: string, lessonId: string) => {
+      const key = `${COMPLETED_LESSONS_KEY_PREFIX}${userId}`;
+      try {
+        const existing = await getCompletedLessonsForUser(userId);
+        existing.add(lessonId);
+        await AsyncStorage.setItem(
+          key,
+          JSON.stringify(Array.from(existing))
+        );
+      } catch (e) {
+        console.warn("Failed to persist completed lesson", e);
+      }
+    },
+    [getCompletedLessonsForUser]
+  );
+
   const hydrateXpFromServer = useCallback(
     async (userId: string, accessToken: string) => {
       try {
@@ -133,46 +170,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (serverBestStreak != null) {
           setBestStreak(serverBestStreak);
         }
-      } catch (e) {
-        console.warn("Failed to hydrate XP from server", e);
+      } catch (error) {
+        console.warn("Failed to hydrate XP from server", error);
       }
     },
-    [saveXpForUser]
+    [API_BASE_URL]
   );
 
-  // Load any stored session on startup
-  useEffect(() => {
+  const restoreAuthSession = useCallback(async () => {
     let isMounted = true;
 
-    (async () => {
-      try {
-        const stored = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
-        if (!stored) return;
-
-        const parsed = JSON.parse(stored) as {
-          user: SupabaseUser;
-          session: SupabaseSession;
-        };
-
-        if (!isMounted) return;
-        setUser(parsed.user);
-        setSession(parsed.session);
-        if (parsed.user && (parsed.user as any).id) {
-          await loadXpForUser((parsed.user as any).id as string);
-        }
-      } catch (e) {
-        console.warn("Failed to restore auth session", e);
-      } finally {
-        if (isMounted) {
-          setInitializing(false);
-        }
+    try {
+      const storedSession = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
+      if (storedSession) {
+        const parsedSession = JSON.parse(storedSession) as SupabaseSession;
+        setSession(parsedSession);
+        setUser(parsedSession.user);
       }
-    })();
+    } catch (e) {
+      console.warn("Failed to restore auth session", e);
+    } finally {
+      if (isMounted) {
+        setInitializing(false);
+      }
+    }
 
     return () => {
       isMounted = false;
     };
-  }, [loadXpForUser]);
+  }, []);
+
+  useEffect(() => {
+    restoreAuthSession();
+  }, [restoreAuthSession]);
 
   const persistState = useCallback(
     async (nextUser: SupabaseUser | null, nextSession: SupabaseSession | null) => {
@@ -240,6 +270,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.removeItem(
           `${XP_STORAGE_KEY_PREFIX}${currentUserId}`
         );
+        await AsyncStorage.removeItem(
+          `${COMPLETED_LESSONS_KEY_PREFIX}${currentUserId}`
+        );
       }
     } catch (e) {
       console.warn("Failed to clear auth session", e);
@@ -247,7 +280,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   // Refresh the Supabase session using the backend /auth/refresh endpoint.
-  const refreshSession = useCallback(async () => {
+  // Returns the new session so callers can use it immediately (before React state updates).
+  const refreshSession = useCallback(async (): Promise<SupabaseSession> => {
     if (!session?.refresh_token) {
       await signOut();
       throw new Error("No refresh token available");
@@ -272,13 +306,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
     }
 
-    await signIn({ user: json.user, session: json.session });
-  }, [session, signOut, signIn]);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const newSession: SupabaseSession = {
+      ...json.session,
+      expires_at:
+        json.session.expires_at ??
+        (json.session.expires_in
+          ? nowSec + json.session.expires_in
+          : undefined),
+    };
+
+    await signIn({ user: json.user, session: newSession });
+    return newSession;
+  }, [session, signOut, signIn, API_BASE_URL]);
 
   // Ensure we have a valid (non-expired) session before protected calls.
-  const ensureValidSession = useCallback(async () => {
+  const ensureValidSession = useCallback(async (): Promise<SupabaseSession> => {
     if (!session) {
       throw new Error("Not authenticated");
+    }
+    if (!session.access_token || typeof session.access_token !== "string") {
+      throw new Error("Invalid session: missing access token");
     }
 
     const nowSec = Math.floor(Date.now() / 1000);
@@ -286,7 +334,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // If token is expired or about to expire in the next 30 seconds, refresh it.
     if (exp && exp - nowSec < 30) {
-      await refreshSession();
+      return await refreshSession();
     }
 
     return session;
@@ -311,8 +359,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // If the token somehow became invalid, try one refresh and retry once.
       if (response.status === 401 || response.status === 403) {
         try {
-          await refreshSession();
-          const refreshedSession = await ensureValidSession();
+          const refreshedSession = await refreshSession();
           const retryHeaders = {
             ...(init.headers || {}),
             Authorization: `Bearer ${refreshedSession.access_token}`,
@@ -322,7 +369,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             ...init,
             headers: retryHeaders,
           });
-        } catch {
+        } catch (error) {
           // Refresh failed, propagate original error response
           return response;
         }
@@ -330,12 +377,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return response;
     },
-    [ensureValidSession, refreshSession]
+    [API_BASE_URL, ensureValidSession, refreshSession]
   );
 
   const syncXp = useCallback(async () => {
-    if (!user || !(user as any).id) return;
-    if (pendingXp <= 0) return;
+    if (!user || !(user as any).id) {
+      return { success: false, error: "Not logged in" };
+    }
+    if (pendingXp <= 0) {
+      return { success: false, error: "No pending XP to sync" };
+    }
 
     const userId = (user as any).id as string;
     const amount = pendingXp;
@@ -346,19 +397,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userId, amount }),
+        body: JSON.stringify({ amount }),
       });
 
       const json = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        console.warn(
-          "Failed to sync XP with backend",
-          typeof json?.error === "string" ? json.error : json
-        );
-        return;
+        const errMsg =
+          typeof json?.error === "string"
+            ? json.error
+            : response.status === 401
+              ? "Session expired. Please log in again."
+              : "Failed to sync XP";
+        console.warn("Failed to sync XP with backend", errMsg);
+        return { success: false, error: errMsg };
       }
 
+      const amountAdded =
+        typeof json?.amountAdded === "number" ? json.amountAdded : amount;
       const serverXp =
         typeof json?.user?.xp === "number" ? (json.user.xp as number) : xp;
       const serverStreak =
@@ -370,22 +426,87 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? (json.user.best_streak as number)
           : bestStreak;
 
+      const newPending = Math.max(0, pendingXp - amountAdded);
+      setPendingXp(newPending);
+      // Only update xp from server when we've fully synced
+      if (newPending === 0) {
+        setXp(serverXp);
+      }
+      setStreak(serverStreak);
+      setBestStreak(serverBestStreak);
+      const totalToSave = newPending === 0 ? serverXp : xp;
+      await saveXpForUser(userId, totalToSave, newPending);
+      return { success: true };
+    } catch (e) {
+      const errMsg =
+        e instanceof Error ? e.message : "Network error. Try again.";
+      console.warn("Error while syncing XP with backend", e);
+      return { success: false, error: errMsg };
+    }
+  }, [authFetch, pendingXp, saveXpForUser, user, xp, streak, bestStreak]);
+
+  const refreshXpFromServer = useCallback(async () => {
+    if (!user || !(user as any).id) {
+      return { success: false, error: "Not logged in" };
+    }
+
+    const userId = (user as any).id as string;
+
+    try {
+      const response = await authFetch("/users/me", { method: "GET" });
+      const json = await response.json().catch(() => ({}));
+
+      if (!response.ok || !json?.user) {
+        const errMsg =
+          typeof json?.error === "string"
+            ? json.error
+            : response.status === 401
+              ? "Session expired. Please log in again."
+              : "Failed to refresh XP";
+        return { success: false, error: errMsg };
+      }
+
+      const serverXp =
+        typeof json.user.xp === "number" ? json.user.xp : xp;
+      const serverStreak =
+        typeof json.user.streak === "number" ? json.user.streak : streak;
+      const serverBestStreak =
+        typeof json.user.best_streak === "number"
+          ? json.user.best_streak
+          : bestStreak;
+
       setXp(serverXp);
       setPendingXp(0);
       setStreak(serverStreak);
       setBestStreak(serverBestStreak);
       await saveXpForUser(userId, serverXp, 0);
+      return { success: true };
     } catch (e) {
-      console.warn("Error while syncing XP with backend", e);
+      const errMsg =
+        e instanceof Error ? e.message : "Network error. Try again.";
+      console.warn("Error refreshing XP from server", e);
+      return { success: false, error: errMsg };
     }
-  }, [authFetch, pendingXp, saveXpForUser, user, xp, streak, bestStreak]);
+  }, [authFetch, bestStreak, saveXpForUser, streak, user, xp]);
 
   const addLessonXp = useCallback(
-    async (amount: number, options?: { sync?: boolean }) => {
+    async (
+      amount: number,
+      options?: { sync?: boolean; lessonId?: string }
+    ) => {
       if (!user || !(user as any).id) return;
       if (!Number.isFinite(amount) || amount <= 0) return;
 
       const userId = (user as any).id as string;
+
+      // When lessonId is provided, only award XP once per lesson (prevents infinite XP glitch)
+      if (options?.lessonId) {
+        const completed = await getCompletedLessonsForUser(userId);
+        if (completed.has(options.lessonId)) {
+          return; // Already earned XP for this lesson
+        }
+        await markLessonCompletedForUser(userId, options.lessonId);
+      }
 
       const nextTotal = xp + amount;
       const nextPending = pendingXp + amount;
@@ -398,7 +519,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await syncXp();
       }
     },
-    [pendingXp, saveXpForUser, syncXp, user, xp]
+    [
+      getCompletedLessonsForUser,
+      markLessonCompletedForUser,
+      pendingXp,
+      saveXpForUser,
+      syncXp,
+      user,
+      xp,
+    ]
   );
 
   const updateStreak = useCallback(async () => {
@@ -412,7 +541,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({}),
       });
 
       const json = await response.json().catch(() => ({}));
@@ -453,6 +582,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         pendingXp,
         addLessonXp,
         syncXp,
+        refreshXpFromServer,
         streak,
         bestStreak,
         updateStreak,
