@@ -206,6 +206,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { QUIZ_DATA } from '../data/quizData';
+import { learningData } from '../data/learningData';
 import { useAuth } from '@/context/AuthContext';
 
 // 1. Requirements at top level for Metro bundler
@@ -225,7 +226,21 @@ const COLORS = {
 
 export default function QuizScreen() {
   const router = useRouter();
-  const { lessonId, lessonTitle } = useLocalSearchParams<{ lessonId: string; lessonTitle: string }>();
+  const {
+    lessonId,
+    lessonTitle,
+    topicTitle,
+    categoryKey,
+    topicKey,
+    timeLimit,
+  } = useLocalSearchParams<{
+    lessonId: string;
+    lessonTitle?: string;
+    topicTitle?: string;
+    categoryKey?: string;
+    topicKey?: string;
+    timeLimit?: string;
+  }>();
   const { addLessonXp } = useAuth();
 
   const questions = QUIZ_DATA[lessonId as string] || [];
@@ -298,7 +313,38 @@ export default function QuizScreen() {
   const quizBonusXP = score * 5;
   const totalEarned = baseLessonXP + quizBonusXP;
 
-  // Award XP once when the quiz is finished
+  const handleContinueJourney = () => {
+    if (!categoryKey || !topicKey) {
+      router.replace('/');
+      return;
+    }
+    const category = learningData[categoryKey as keyof typeof learningData];
+    const topic = category?.topics?.[topicKey as keyof typeof category.topics] as { title?: string; lessons?: { id: string; title: string }[] } | undefined;
+    const allLessons = topic?.lessons ?? [];
+    const minutes = parseInt(timeLimit ?? '5', 10);
+    const limit = Math.floor(minutes / 5);
+    const unlocked = allLessons.slice(0, limit);
+    const currentIndex = unlocked.findIndex((l) => l.id === lessonId);
+    const nextLesson = currentIndex >= 0 && currentIndex + 1 < unlocked.length ? unlocked[currentIndex + 1] : null;
+    if (nextLesson) {
+      router.replace({
+        pathname: '/lesson-details',
+        params: {
+          lessonId: nextLesson.id,
+          lessonTitle: nextLesson.title,
+          topicTitle: topicTitle ?? topic?.title ?? '',
+          categoryKey,
+          topicKey,
+          timeLimit: timeLimit ?? '5',
+        },
+      });
+    } else {
+      router.replace('/');
+    }
+  };
+
+  // Award XP once when the quiz is finished - add locally without syncing yet
+  // XP will be synced when user returns home
   useEffect(() => {
     if (!isFinished) return;
     if (!lessonId) return;
@@ -309,7 +355,9 @@ export default function QuizScreen() {
 
     (async () => {
       try {
-        await addLessonXp(amount, { sync: true, lessonId: lessonKey });
+        // Add XP locally without syncing immediately
+        // sync: false means it will be added to pendingXp and synced when returning home
+        await addLessonXp(amount, { sync: false, lessonId: lessonKey });
       } catch (e) {
         console.warn('Failed to award lesson XP', e);
       }
@@ -340,7 +388,7 @@ export default function QuizScreen() {
               <Text style={styles.breakdownValue}>+{quizBonusXP} XP</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.finishBtn} onPress={() => router.dismissAll()}>
+          <TouchableOpacity style={styles.finishBtn} onPress={handleContinueJourney}>
             <Text style={styles.finishBtnText}>Continue Journey</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.DARK_BG} />
           </TouchableOpacity>

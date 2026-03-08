@@ -36,7 +36,7 @@ type AuthContextValue = AuthState & {
     amount: number,
     options?: { sync?: boolean; lessonId?: string }
   ) => Promise<void>;
-  syncXp: () => Promise<{ success: boolean; error?: string }>;
+  syncXp: (amountOverride?: number) => Promise<{ success: boolean; error?: string }>;
   refreshXpFromServer: () => Promise<{ success: boolean; error?: string }>;
    streak: number;
    bestStreak: number;
@@ -63,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const key = `${XP_STORAGE_KEY_PREFIX}${userId}`;
     try {
       const stored = await AsyncStorage.getItem(key);
+      console.log("Loaded XP from AsyncStorage:", stored);
       if (!stored) {
         setXp(0);
         setPendingXp(0);
@@ -87,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (userId: string, total: number, pending: number) => {
       const key = `${XP_STORAGE_KEY_PREFIX}${userId}`;
       try {
+        console.log("Saving XP to AsyncStorage:", { totalXp: total, pendingXp: pending });
         await AsyncStorage.setItem(
           key,
           JSON.stringify({ totalXp: total, pendingXp: pending })
@@ -380,16 +382,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [API_BASE_URL, ensureValidSession, refreshSession]
   );
 
-  const syncXp = useCallback(async () => {
-    if (!user || !(user as any).id) {
+  const syncXp = useCallback(async (amountOverride?: number) => {
+    if (!session) {
       return { success: false, error: "Not logged in" };
     }
-    if (pendingXp <= 0) {
+
+    const currentPending =
+      typeof amountOverride === "number" ? amountOverride : pendingXp;
+    if (!Number.isFinite(currentPending) || currentPending <= 0) {
       return { success: false, error: "No pending XP to sync" };
     }
 
-    const userId = (user as any).id as string;
-    const amount = pendingXp;
+    const userId =
+      ((user as any)?.id as string | undefined) ??
+      (((session as any)?.user?.id as string | undefined) ?? undefined);
+    const amount = currentPending;
 
     try {
       const response = await authFetch("/users/xp", {
@@ -426,16 +433,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? (json.user.best_streak as number)
           : bestStreak;
 
-      const newPending = Math.max(0, pendingXp - amountAdded);
-      setPendingXp(newPending);
+      const newPending = Math.max(0, currentPending - amountAdded);
+      // Use functional update so we don't clobber newer pending XP
+      setPendingXp((prev) => Math.max(0, prev - amountAdded));
       // Only update xp from server when we've fully synced
       if (newPending === 0) {
         setXp(serverXp);
       }
       setStreak(serverStreak);
       setBestStreak(serverBestStreak);
-      const totalToSave = newPending === 0 ? serverXp : xp;
-      await saveXpForUser(userId, totalToSave, newPending);
+      if (userId) {
+        const totalToSave = newPending === 0 ? serverXp : xp;
+        await saveXpForUser(userId, totalToSave, newPending);
+      }
       return { success: true };
     } catch (e) {
       const errMsg =
@@ -443,7 +453,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.warn("Error while syncing XP with backend", e);
       return { success: false, error: errMsg };
     }
-  }, [authFetch, pendingXp, saveXpForUser, user, xp, streak, bestStreak]);
+  }, [authFetch, pendingXp, saveXpForUser, session, user, xp, streak, bestStreak]);
 
   const refreshXpFromServer = useCallback(async () => {
     if (!user || !(user as any).id) {
@@ -516,7 +526,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await saveXpForUser(userId, nextTotal, nextPending);
 
       if (options?.sync) {
-        await syncXp();
+        // syncXp reads pendingXp from state, which may not have updated yet.
+        // Pass the computed pending amount so the backend gets the right value.
+        await syncXp(nextPending);
       }
     },
     [

@@ -1,7 +1,8 @@
 import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { FlatList, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const COLORS = {
@@ -25,7 +26,25 @@ export default function CategoryScreen() {
     user,
     session,
     initializing,
+    pendingXp,
+    syncXp,
+    refreshXpFromServer,
   } = useAuth();
+
+  // When user returns to home (e.g. after finishing quizzes), refresh XP so profile shows correct total
+  useFocusEffect(
+    useCallback(() => {
+      if (user && session) {
+        // Don't wipe local pending XP by refreshing from server.
+        // If we have pending XP, sync it first; otherwise refresh from server.
+        if (pendingXp > 0) {
+          syncXp();
+        } else {
+          refreshXpFromServer();
+        }
+      }
+    }, [user, session, pendingXp, syncXp, refreshXpFromServer])
+  );
 
   // Guard: if not logged in, redirect to login screen.
   useEffect(() => {
@@ -72,24 +91,26 @@ export default function CategoryScreen() {
         </View>
         
         <View style={styles.headerActions}>
-          <TouchableOpacity 
-            style={styles.leaderboardBtn}
-            onPress={() => router.push('/leaderboard')} 
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => router.push('/leaderboard')}
           >
-            <Ionicons name="trophy" size={16} color={COLORS.AMBER} />
-            <Text style={styles.leaderboardText}>Rank #12</Text>
+            <Ionicons name="trophy" size={18} color={COLORS.AMBER} />
           </TouchableOpacity>
-
-          <View>
-            <TouchableOpacity 
-              style={styles.profileBtn} 
-              onPress={() => router.push('/profile')}
-            >
-              <View style={styles.avatarFrame}>
-                 <Ionicons name="person" size={20} color={COLORS.TEXT_SUB} />
-              </View>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => router.push('/badges')}
+          >
+            <Ionicons name="ribbon" size={18} color={COLORS.PRIMARY} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.profileBtn} 
+            onPress={() => router.push('/profile')}
+          >
+            <View style={styles.avatarFrame}>
+              <Ionicons name="person" size={20} color={COLORS.TEXT_SUB} />
+            </View>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -183,6 +204,17 @@ const styles = StyleSheet.create({
 
   sectionHeader: { paddingHorizontal: 24, marginBottom: 15 },
   sectionTitle: { fontSize: 12, fontWeight: '900', color: COLORS.PRIMARY, letterSpacing: 2 },
+
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: COLORS.CARD_BG,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
   
   listContent: { paddingHorizontal: 24, paddingBottom: 40 },
   card: { 
