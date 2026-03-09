@@ -7,13 +7,8 @@ export const learningData = {
         lessons: [
           { id: 'f1', title: "What is a Stock?", duration: "5" },
           { id: 'f2', title: "How Exchanges Work", duration: "10" },
-          { 
-            id: 'f3', 
-            title: "Market Orders vs Limit Orders", 
-            duration: "15" // 40 XP
-          },
-          
-        ]
+          { id: 'f3', title: "Market Orders vs Limit Orders", duration: "15" },
+          ]
       }
     }
   },
